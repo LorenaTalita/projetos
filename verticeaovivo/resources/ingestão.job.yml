@@ -1,0 +1,43 @@
+variables:
+  s3_access_key_id:
+    description: chave do data lake (o valor fica fora do Git)
+  s3_secret_access_key:
+    description: chave do data lake (o valor fica fora do Git)
+
+resources:
+  jobs:
+    ingestão:
+      name: Ingestão
+      tasks:
+        - task_key: IngestaoAPI
+          disabled: false
+          email_notifications: {}
+          notebook_task:
+            notebook_path: ../src/Ingestao_API.ipynb
+            source: WORKSPACE
+          run_if: ALL_SUCCESS
+          timeout_seconds: 0
+          webhook_notifications: {}
+        - task_key: IngestaoAWS
+          depends_on:
+            - task_key: IngestaoAPI
+          disabled: false
+          email_notifications: {}
+          notebook_task:
+            base_parameters:
+              AWS_ACCESS_KEY_ID: ${{var.s3_access_key_id}}
+              AWS_DEFAULT_REGION: us-east-2
+              AWS_SECRET_ACCESS_KEY: ${{var.s3_secret_access_key}}
+              S3_ENDPOINT: https://dtukdfwkxhhshyyitshh.storage.supabase.co/storage/v1/s3
+            notebook_path: ../src/02_ingestao_boto3_gabarito.ipynb
+            source: WORKSPACE
+          run_if: ALL_SUCCESS
+          timeout_seconds: 0
+      email_notifications:
+        no_alert_for_skipped_runs: false
+      max_concurrent_runs: 1
+      performance_target: PERFORMANCE_OPTIMIZED
+      queue:
+        enabled: true
+      timeout_seconds: 0
+      webhook_notifications: {}
