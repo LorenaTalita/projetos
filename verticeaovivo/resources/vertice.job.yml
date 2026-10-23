@@ -1,8 +1,18 @@
+# Job vertice_farol — Orquestração completa da Torre de Controle (6 tarefas):
+# 1. ingestao_feriados   (notebook_task) : coleta feriados nacionais da BrasilAPI para bronze.feriados
+# 2. ingestao_data_lake  (notebook_task) : baixa arquivos do Supabase S3 com boto3 e recria as 9 tabelas bronze
+#    (1 e 2 rodam em paralelo no início)
+# 3. conferencia_bronze  (sql_task)      : valida a contagem das 9 tabelas bronze (seed 42) após as duas ingestões
+# 4. medalhao            (pipeline_task) : atualiza o pipeline Lakeflow vertice_medalhao (7 tabelas silver + 3 gold)
+# 5. testes_de_qualidade (sql_task)      : executa os 10 testes de integridade e reconciliação bronze/silver/gold
+# 6. status_com_ia       (sql_task)      : classifica e extrai bloqueios de status_semanal em gold.status_estruturado
+#    (5 e 6 rodam em paralelo depois de medalhao)
+
 resources:
   jobs:
     vertice_farol:
       name: vertice_farol
-      # Toda segunda às 6h (CLAUDE.md §4). Fica pausado até o prompt 4 ligar o agendamento.
+      # Toda segunda às 6h (America/Sao_Paulo). No target dev fica pausado pelo preset.
       schedule:
         quartz_cron_expression: "0 0 6 ? * MON"
         timezone_id: America/Sao_Paulo
@@ -14,8 +24,6 @@ resources:
             source: WORKSPACE
           timeout_seconds: 0
         - task_key: ingestao_data_lake
-          depends_on:
-            - task_key: ingestao_feriados
           notebook_task:
             base_parameters:
               AWS_ACCESS_KEY_ID: ${var.s3_access_key_id}
@@ -46,6 +54,14 @@ resources:
           sql_task:
             file:
               path: ../src/testes/testes.sql
+            warehouse_id: ${var.warehouse_id}
+          timeout_seconds: 0
+        - task_key: status_com_ia
+          depends_on:
+            - task_key: medalhao
+          sql_task:
+            file:
+              path: ../src/ia/status_estruturado.sql
             warehouse_id: ${var.warehouse_id}
           timeout_seconds: 0
       email_notifications:
